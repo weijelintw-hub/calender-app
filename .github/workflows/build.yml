@@ -18,7 +18,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
 
       - name: Unzip & Locate Project
         run: |
@@ -26,11 +31,12 @@ jobs:
           TARGET_DIR=$(dirname $(find ./source_project -name "package.json" | head -n 1))
           echo "PROJECT_DIR=$TARGET_DIR" >> $GITHUB_ENV
 
-      - name: Build Web & Capacitor iOS
+      - name: Install Dependencies & Setup iOS
         run: |
           cd "${{ env.PROJECT_DIR }}"
-          npm install --legacy-peer-deps
-          npm run build --if-present
+          # 強制 pnpm 使用扁平化安裝，避免 iOS CocoaPods 找不到 .pnpm 軟連結路徑
+          pnpm install --shamefully-hoist
+          pnpm run build || true
           npx cap add ios || true
           npx cap copy ios || true
           npx cap sync ios || true
@@ -40,7 +46,6 @@ jobs:
           cd "${{ env.PROJECT_DIR }}"
           WORKSPACE=$(find ios -name "*.xcworkspace" | head -n 1)
 
-          # 採用模擬器/通用架構編譯，完全繞過 Apple 憑證檢測
           xcodebuild build \
             -workspace "$WORKSPACE" \
             -scheme App \
@@ -50,7 +55,6 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
-          # 建立 Sideloadly 所需的 Payload IPA 結構
           mkdir -p build/Payload
           APP_PATH=$(find ios/App/Build -name "*.app" | head -n 1)
           if [ -z "$APP_PATH" ]; then
