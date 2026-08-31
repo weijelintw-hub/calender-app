@@ -15,30 +15,59 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Unzip source code
-        run: |
-          unzip calendar-diary-source-1.0.0.zip -d ./source_project
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: Install dependencies & Build iOS IPA
+      - name: Unzip & Locate Project
         run: |
-          cd source_project/* || cd source_project
+          unzip -o calendar-diary-source-1.0.0.zip -d ./source_project
+          TARGET_DIR=$(dirname $(find ./source_project -name "package.json" | head -n 1))
+          echo "PROJECT_DIR=$TARGET_DIR" >> $GITHUB_ENV
+          echo "Project directory found at: $TARGET_DIR"
+
+      - name: Install Dependencies & Build Web Assets
+        run: |
+          cd "${{ env.PROJECT_DIR }}"
           npm install --legacy-peer-deps
-          npm run build || true
+          npm run build --if-present
+
+      - name: Setup Capacitor iOS Project
+        run: |
+          cd "${{ env.PROJECT_DIR }}"
           npx cap add ios || true
           npx cap copy ios || true
           npx cap sync ios || true
-          xcodebuild -workspace ios/App/App.xcworkspace -scheme App -sdk iphoneos -configuration Release CODE_SIGNING_ALLOWED=NO archive -archivePath build/App.xcarchive
-          mkdir -p build/Payload
-          cp -r build/App.xcarchive/Products/Applications/App.app build/Payload/
-          cd build && zip -r app.ipa Payload
+
+      - name: Build Unsigned IPA
+        run: |
+          cd "${{ env.PROJECT_DIR }}"
+          
+          # 尋找 Xcode Workspace 位置
+          WORKSPACE=$(find . -name "*.xcworkspace" | head -n 1)
+          if [ -z "$WORKSPACE" ]; then
+            echo "Error: Could not find any .xcworkspace file!"
+            exit 1
+          fi
+          echo "Found workspace at: $WORKSPACE"
+
+          # 執行 Xcode 檔案封裝
+          xcodebuild -workspace "$WORKSPACE" \
+            -scheme App \
+            -sdk iphoneos \
+            -configuration Release \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            archive -archivePath ./build/App.xcarchive
+
+          # 製作 IPA 檔案結構
+          mkdir -p ./build/Payload
+          cp -r ./build/App.xcarchive/Products/Applications/*.app ./build/Payload/
+          cd ./build && zip -r app.ipa Payload
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: calendar-app-ipa
-          path: source_project/**/build/app.ipa
+          path: ${{ env.PROJECT_DIR }}/build/app.ipa
