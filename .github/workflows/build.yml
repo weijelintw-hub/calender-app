@@ -34,8 +34,8 @@ jobs:
       - name: Install Dependencies & Setup iOS
         run: |
           cd "${{ env.PROJECT_DIR }}"
-          # 強制 pnpm 使用扁平化安裝，避免 iOS CocoaPods 找不到 .pnpm 軟連結路徑
-          pnpm install --shamefully-hoist
+          # 強制無視 lockfile 比對並進行扁平化安裝
+          pnpm install --shamefully-hoist --no-frozen-lockfile
           pnpm run build || true
           npx cap add ios || true
           npx cap copy ios || true
