@@ -22,13 +22,15 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Install dependencies & Build iOS IPA
         run: |
           cd source_project/* || cd source_project
           npm install --legacy-peer-deps
           npm run build || true
+          npx cap add ios || true
+          npx cap copy ios || true
           npx cap sync ios || true
           xcodebuild -workspace ios/App/App.xcworkspace -scheme App -sdk iphoneos -configuration Release CODE_SIGNING_ALLOWED=NO archive -archivePath build/App.xcarchive
           mkdir -p build/Payload
