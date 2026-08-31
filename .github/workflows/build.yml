@@ -1,1 +1,42 @@
+name: Build Calendar Diary iOS IPA
 
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    name: Build unsigned iOS IPA
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Unzip source code
+        run: |
+          unzip calendar-diary-source-1.0.0.zip -d ./source_project
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies & Build iOS IPA
+        run: |
+          cd source_project/* || cd source_project
+          npm install
+          npm run build || true
+          npx cap sync ios || true
+          xcodebuild -workspace ios/App/App.xcworkspace -scheme App -sdk iphoneos -configuration Release CODE_SIGNING_ALLOWED=NO archive -archivePath build/App.xcarchive
+          mkdir -p build/Payload
+          cp -r build/App.xcarchive/Products/Applications/App.app build/Payload/
+          cd build && zip -r app.ipa Payload
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: calendar-app-ipa
+          path: source_project/**/build/app.ipa
