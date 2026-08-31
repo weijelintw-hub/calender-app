@@ -27,7 +27,7 @@ jobs:
       - name: Install dependencies & Build iOS IPA
         run: |
           cd source_project/* || cd source_project
-          npm install
+          npm install --legacy-peer-deps
           npm run build || true
           npx cap sync ios || true
           xcodebuild -workspace ios/App/App.xcworkspace -scheme App -sdk iphoneos -configuration Release CODE_SIGNING_ALLOWED=NO archive -archivePath build/App.xcarchive
