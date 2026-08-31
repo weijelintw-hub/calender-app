@@ -34,23 +34,30 @@ jobs:
       - name: Install Dependencies & Setup iOS
         run: |
           cd "${{ env.PROJECT_DIR }}"
-          # 強制無視 lockfile 比對並進行扁平化安裝
           pnpm install --shamefully-hoist --no-frozen-lockfile
           pnpm run build || true
           npx cap add ios || true
           npx cap copy ios || true
           npx cap sync ios || true
 
-      - name: Compile unsigned App Bundle
+      - name: Inject Info.plist Permissions & Build for Real Device (iphoneos)
         run: |
           cd "${{ env.PROJECT_DIR }}"
+          PLIST_PATH="ios/App/App/Info.plist"
+
+          # 自動補上 Face ID 存取權限說明，防止權限崩潰
+          if [ -f "$PLIST_PATH" ]; then
+            /usr/libexec/PlistBuddy -c "Add :NSFaceIDUsageDescription string 'App requires Face ID access for security authentication.'" "$PLIST_PATH" 2>/dev/null || true
+          fi
+
           WORKSPACE=$(find ios -name "*.xcworkspace" | head -n 1)
 
+          # 使用 iphoneos SDK 編譯真機可執行的二進位檔
           xcodebuild build \
             -workspace "$WORKSPACE" \
             -scheme App \
             -configuration Release \
-            -sdk iphonesimulator \
+            -sdk iphoneos \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
