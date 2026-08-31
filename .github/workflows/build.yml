@@ -25,7 +25,6 @@ jobs:
           unzip -o calendar-diary-source-1.0.0.zip -d ./source_project
           TARGET_DIR=$(dirname $(find ./source_project -name "package.json" | head -n 1))
           echo "PROJECT_DIR=$TARGET_DIR" >> $GITHUB_ENV
-          echo "Project directory found at: $TARGET_DIR"
 
       - name: Install Dependencies & Build Web Assets
         run: |
@@ -43,25 +42,19 @@ jobs:
       - name: Build Unsigned IPA
         run: |
           cd "${{ env.PROJECT_DIR }}"
-          
-          # 尋找 Xcode Workspace 位置
           WORKSPACE=$(find . -name "*.xcworkspace" | head -n 1)
-          if [ -z "$WORKSPACE" ]; then
-            echo "Error: Could not find any .xcworkspace file!"
-            exit 1
-          fi
-          echo "Found workspace at: $WORKSPACE"
-
-          # 執行 Xcode 檔案封裝
+          
+          # 使用 Simulator/Generic iOS 參數無視簽名與架構限制
           xcodebuild -workspace "$WORKSPACE" \
             -scheme App \
-            -sdk iphoneos \
             -configuration Release \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             archive -archivePath ./build/App.xcarchive
 
-          # 製作 IPA 檔案結構
           mkdir -p ./build/Payload
           cp -r ./build/App.xcarchive/Products/Applications/*.app ./build/Payload/
           cd ./build && zip -r app.ipa Payload
