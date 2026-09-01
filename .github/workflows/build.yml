@@ -25,13 +25,20 @@ jobs:
         with:
           version: 9
 
-      - name: Unzip & Locate Project
+      - name: Unzip & Locate Project Directory
         run: |
-          unzip -o calendar-diary-source-1.0.0.zip -d ./source_project
-          TARGET_DIR=$(dirname $(find ./source_project -name "package.json" | head -n 1))
-          echo "PROJECT_DIR=$TARGET_DIR" >> $GITHUB_ENV
+          # 尋找原始碼 zip 檔並解壓
+          ZIP_FILE=$(find . -maxdepth 2 -name "*.zip" | head -n 1)
+          if [ -n "$ZIP_FILE" ]; then
+            unzip -o "$ZIP_FILE" -d ./extracted_project
+          fi
 
-      - name: Install Dependencies & Setup iOS
+          # 精確定位 package.json 所在的專案根目錄
+          TARGET_DIR=$(dirname $(find . -name "package.json" -not -path "*/node_modules/*" | head -n 1))
+          echo "PROJECT_DIR=$TARGET_DIR" >> $GITHUB_ENV
+          echo "Found project directory at: $TARGET_DIR"
+
+      - name: Install Dependencies & Build Frontend
         run: |
           cd "${{ env.PROJECT_DIR }}"
           pnpm install --shamefully-hoist --no-frozen-lockfile
@@ -40,19 +47,21 @@ jobs:
           npx cap copy ios || true
           npx cap sync ios || true
 
-      - name: Inject Info.plist Permissions & Build for Real Device (iphoneos)
+      - name: Inject Permissions & Build IPA for Real Device
         run: |
           cd "${{ env.PROJECT_DIR }}"
           PLIST_PATH="ios/App/App/Info.plist"
 
-          # 自動補上 Face ID 存取權限說明，防止權限崩潰
+          # 1. 自動注入 Face ID 與 行事曆 (NSCalendarsUsageDescription) 存取權限，防止原生黑屏崩潰
           if [ -f "$PLIST_PATH" ]; then
             /usr/libexec/PlistBuddy -c "Add :NSFaceIDUsageDescription string 'App requires Face ID access for security authentication.'" "$PLIST_PATH" 2>/dev/null || true
+            /usr/libexec/PlistBuddy -c "Add :NSCalendarsUsageDescription string 'App requires access to calendar for syncing events.'" "$PLIST_PATH" 2>/dev/null || true
+            /usr/libexec/PlistBuddy -c "Add :NSCalendarsFullAccessUsageDescription string 'App requires full access to calendar to write and update events.'" "$PLIST_PATH" 2>/dev/null || true
           fi
 
           WORKSPACE=$(find ios -name "*.xcworkspace" | head -n 1)
 
-          # 使用 iphoneos SDK 編譯真機可執行的二進位檔
+          # 2. 強制指定 -sdk iphoneos 針對實體 iPhone CPU 架構編譯
           xcodebuild build \
             -workspace "$WORKSPACE" \
             -scheme App \
@@ -62,6 +71,7 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
+          # 3. 打包生成 IPA 檔案
           mkdir -p build/Payload
           APP_PATH=$(find ios/App/Build -name "*.app" | head -n 1)
           if [ -z "$APP_PATH" ]; then
